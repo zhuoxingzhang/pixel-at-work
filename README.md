@@ -7,11 +7,7 @@
 
 A pixel-art band above the Claude Code prompt that shows what Claude is doing right now: editing, searching, running tests, building, pushing, querying a database, moving containers, thinking. Old computer-science jokes ride on the spinner, and on holidays the band dresses up.
 
-<p align="center">
-  <img src="docs/promo-en.gif" width="360" alt="A 33-second tour of at-work: the scenes with their labels, then the holidays">
-</p>
-
-![at-work in the desktop app](docs/tour.gif)
+![at-work in the desktop app, going through all of its scenes](docs/tour.gif)
 
 ## What it shows
 

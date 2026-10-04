@@ -7,11 +7,7 @@
 
 在 Claude Code 输入框上方放一条像素风动画，实时显示 Claude 正在做什么：改代码、搜索、跑测试、构建、推送、查数据库、搬集装箱、思考……思考时，加载提示里会冒出计算机科学的老梗；逢年过节，整条动画还会换上节日装饰。
 
-<p align="center">
-  <img src="docs/promo-zh.gif" width="360" alt="at-work 的 33 秒演示：各个场景和它们的标签，最后是节日装饰">
-</p>
-
-![桌面应用里的 at-work](docs/tour.gif)
+![桌面应用里的 at-work，依次演完所有场景](docs/tour-zh.gif)
 
 ## 都有哪些场景
 
@@ -39,7 +35,7 @@
 
 ### 节日
 
-![节日里的动画](docs/holidays.png)
+![节日里的动画](docs/holidays-zh.png)
 
 新年、春节（除夕到元宵）、端午、Matariki、中秋、万圣节、圣诞，各有自己的装饰，有的还给小怪兽戴帽子，天空塔也会亮起节日的颜色。农历日期和 Matariki 列到 2035 年。任何一天都能用 `/at-work holiday christmas` 这样的命令提前看，`/at-work holiday auto` 回到按日期显示。
 
