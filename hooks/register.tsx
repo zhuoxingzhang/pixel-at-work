@@ -131,12 +131,12 @@ type Layout = { W: number; L: number; R: number }
  * The width of the art that fills the band. The band has a height cap (maxRows, 12 rows on a desktop with 95
  * columns across); a picture taller than the cap is shrunk whole and leaves the sides empty, as 104 x 28 did while
  * 208 x 28 filled. So the art is wide enough that the band's full width, at its proportions, stays within maxRows
- * less the label's row, a row taken as 1.7 columns high. When idle it is flatter still (half as tall as the
- * 104-pixel picture).
+ * less two rows for the label (a long one wraps rather than ending in an ellipsis), a row taken as 1.7 columns
+ * high. When idle it is flatter still (half as tall as the 104-pixel picture).
  */
 function layout(columns: number | undefined, rows: number | undefined, idle: boolean): Layout {
   const cols = columns !== undefined && columns > 0 ? columns : 95
-  const room = rows !== undefined && rows > 2 ? rows - 1 : 11
+  const room = rows !== undefined && rows > 3 ? rows - 2 : 10
   const base = Math.max(104, Math.min(240, Math.ceil((H * cols) / (room * 1.7))))
   const W = idle ? Math.min(320, Math.max(base, 2 * (cols + 9))) : base
   const L = Math.floor((W - STAGE) / 2)
@@ -1510,7 +1510,8 @@ function base(p: unknown): string {
   return String(p ?? '').split(/[\\/]/).pop() ?? ''
 }
 
-function short(text: unknown, n = 40): string {
+// The label row wraps onto a second row (see layout), so a cut is only a guard against a runaway argument.
+function short(text: unknown, n = 100): string {
   const s = String(text ?? '').replace(/\s+/g, ' ').trim()
   return s.length > n ? `${s.slice(0, n - 1)}…` : s
 }
@@ -1540,7 +1541,8 @@ function classify(e: { tool: string; [argument: string]: unknown }): { kind: str
   const t = e.tool
   if (t === 'Bash' || t === 'PowerShell') {
     const c = String(e.command ?? '')
-    const what = short(e.description ?? c)
+    // a description says it in a few words; a bare command is code, and only its start reads
+    const what = e.description ? short(e.description) : short(c, 60)
     if (e.run_in_background === true) return { kind: 'fish', label: tag('放下鱼竿等结果', 'rod out, waiting', what) }
     const rule = COMMANDS.find(([re]) => re.test(c))
     return rule ? { kind: rule[1], label: tag(rule[2][0], rule[2][1], what) } : { kind: 'shell', label: what }
@@ -1549,7 +1551,7 @@ function classify(e: { tool: string; [argument: string]: unknown }): { kind: str
     const f = base(e.file_path)
     return { kind: 'read', label: /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(f) ? say(`看图 ${f}`, `looking at ${f}`) : say(`读 ${f}`, `reading ${f}`) }
   }
-  if (t === 'Grep' || t === 'Glob') return { kind: 'search', label: say(`找 ${short(e.pattern, 30)}`, `searching ${short(e.pattern, 30)}`) }
+  if (t === 'Grep' || t === 'Glob') return { kind: 'search', label: say(`找 ${short(e.pattern, 60)}`, `searching ${short(e.pattern, 60)}`) }
   if (t === 'ToolSearch') return { kind: 'search', label: say('找工具', 'looking for a tool') }
   if (t === 'Monitor') return { kind: 'fish', label: tag('盯着浮漂', 'watching the float', short(e.description ?? e.command)) }
   if (t === 'ScheduleWakeup') return { kind: 'fish', label: say('定个闹钟，过会儿回来收线', 'alarm set, back later to reel in') }
@@ -1577,7 +1579,7 @@ function classify(e: { tool: string; [argument: string]: unknown }): { kind: str
   }
   if (/Claude_Browser|claude-in-chrome/.test(t)) return { kind: 'browse', label: say('逛网页', 'browsing') }
   if (t === 'WebFetch' || t === 'WebSearch') return { kind: 'web', label: say('上网查查', 'looking it up online') }
-  if (t === 'Skill') return { kind: 'mod', label: tag('翻技能书', 'opening the skill book', short(e.skill, 30)) }
+  if (t === 'Skill') return { kind: 'mod', label: tag('翻技能书', 'opening the skill book', short(e.skill, 60)) }
   if (/^Cron|__(create_event|update_event|list_events|suggest_time)$|scheduled_task$/.test(t)) return { kind: 'plan', label: say('排日程', 'scheduling') }
   if (t.startsWith('mcp__')) return { kind: 'web', label: say(`用 ${t.split('__').pop()}`, `using ${t.split('__').pop()}`) }
   return { kind: 'shell', label: t }
@@ -1894,14 +1896,18 @@ export const register: Register = (on, options) => {
               )
             })}
           <Box flexDirection="row" gap={1}>
-            <Text bold wrap="truncate">
-              {label}
-              {more}
-            </Text>
-            {e.props.isWorking && started ? (
-              <Text dimColor>
-                {say(`· 第 ${n} 步 · ${hhmm(started)} 开始`, `· step ${n} · since ${hhmm(started)}`)}
+            <Box flexShrink={1}>
+              <Text bold wrap="wrap">
+                {label}
+                {more}
               </Text>
+            </Box>
+            {e.props.isWorking && started ? (
+              <Box flexShrink={0}>
+                <Text dimColor>
+                  {say(`· 第 ${n} 步 · ${hhmm(started)} 开始`, `· step ${n} · since ${hhmm(started)}`)}
+                </Text>
+              </Box>
             ) : null}
           </Box>
         </Box>
@@ -1917,7 +1923,7 @@ export const register: Register = (on, options) => {
             {kind === 'rain' ? '🌧 (•︵•)' : kind === 'sleep' ? '💤 (－_－)' : '☕ (ᵔᴥᵔ)'}
             {hol ? ` ${HOLIDAYS[hol].emoji}` : ''}
           </Text>
-          <Text dimColor wrap="truncate">{label}</Text>
+          <Text dimColor wrap="wrap">{label}</Text>
         </Box>
       )
     }
@@ -1929,13 +1935,17 @@ export const register: Register = (on, options) => {
           {hol ? `${HOLIDAYS[hol].emoji} ` : ''}
           {scene(kind, f)}
         </Text>
-        <Text wrap="truncate">
-          {label}
-          {more}
-        </Text>
-        <Text dimColor>
-          {say(`· 第 ${n} 步 · ${elapsed}`, `· step ${n} · ${elapsed}`)}
-        </Text>
+        <Box flexShrink={1}>
+          <Text wrap="wrap">
+            {label}
+            {more}
+          </Text>
+        </Box>
+        <Box flexShrink={0}>
+          <Text dimColor>
+            {say(`· 第 ${n} 步 · ${elapsed}`, `· step ${n} · ${elapsed}`)}
+          </Text>
+        </Box>
       </Box>
     )
   })

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "at-work",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A pixel-art animation above the prompt that shows what Claude is doing right now, with computer-science jokes on the spinner and holiday decorations",
   "author": {
     "name": "Zhuoxing Zhang",

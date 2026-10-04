@@ -11,7 +11,18 @@ async function band($: any, props: never, surface: 'desktop' | 'terminal' = 'des
   return short(await (await $.ui.mount({ plugin: 'at-work', surface, component: 'AbovePrompt', props })).drawn())
 }
 
-const label = (d: string) => d.match(/"bold":true,"wrap":"truncate"\},"children":\["([^"]*)"/)?.[1]
+const label = (d: string) => d.match(/"bold":true,"wrap":"wrap"\},"children":\["([^"]*)"/)?.[1]
+
+test('a long description is shown whole, on a label that wraps', ZH, async ($, on) => {
+  mock.clock(on, { now: Date.now() })
+  on('tool.call', async () => ({ result: 'ok', text: 'ok' }) as never)
+  const description = 'Stop the old after-chain, sweep and pgbench, wait for backends'
+  await $.tool.call({ tool: 'Bash', command: 'ssh host true', description } as never)
+  const d = await band($, working)
+  console.log('LONG', label(d))
+  expect(label(d)).toContain(description)
+  expect(d).not.toContain('…')
+})
 
 // A call that just ended keeps its scene for a while (linger), so the band shows it right after the call.
 test('each command lands in its scene', ZH, async ($, on) => {
