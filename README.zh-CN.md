@@ -7,6 +7,10 @@
 
 在 Claude Code 输入框上方放一条像素风动画，实时显示 Claude 正在做什么：改代码、搜索、跑测试、构建、推送、查数据库、搬集装箱、思考……思考时，加载提示里会冒出计算机科学的老梗；逢年过节，整条动画还会换上节日装饰。
 
+<p align="center">
+  <img src="docs/promo-zh.gif" width="360" alt="at-work 的 33 秒演示：各个场景和它们的标签，最后是节日装饰">
+</p>
+
 ![桌面应用里的 at-work](docs/tour.gif)
 
 ## 都有哪些场景
