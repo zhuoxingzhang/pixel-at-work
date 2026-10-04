@@ -7,7 +7,9 @@
 
 A pixel-art band above the Claude Code prompt that shows what Claude is doing right now: editing, searching, running tests, building, pushing, querying a database, moving containers, thinking. Old computer-science jokes ride on the spinner, and on holidays the band dresses up.
 
-![at-work in the desktop app, going through all of its scenes](docs/tour.gif)
+<p align="center">
+  <img src="docs/tour.gif" alt="at-work in the desktop app, going through all of its scenes">
+</p>
 
 ## What it shows
 
@@ -35,7 +37,9 @@ Finished calls pile up as crates at the left, a red one for each failure. The ri
 
 ### Holidays
 
-![the band on holidays](docs/holidays.png)
+<p align="center">
+  <img src="docs/holidays.png" alt="the band on holidays">
+</p>
 
 New Year, Spring Festival (from its eve to the Lantern Festival), Dragon Boat Festival, Matariki, Mid-Autumn Festival, Halloween and Christmas, each with its own decorations, a hat for the creature on some, and the Sky Tower lit in the day's colours. Lunar dates and Matariki are tabled up to 2035. Preview one on any day with `/at-work holiday christmas`; `/at-work holiday auto` goes back to the calendar.
 
