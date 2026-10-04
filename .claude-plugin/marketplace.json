@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace-manifest.json",
+  "name": "pixel-at-work",
+  "owner": {
+    "name": "Zhuoxing Zhang",
+    "url": "https://github.com/zhuoxingzhang"
+  },
+  "description": "at-work: a pixel-art animation above the Claude Code prompt that shows what Claude is doing right now.",
+  "plugins": [
+    {
+      "name": "at-work",
+      "source": "./",
+      "description": "A pixel-art animation above the prompt that shows what Claude is doing right now, with computer-science jokes on the spinner and holiday decorations",
+      "license": "MIT",
+      "keywords": ["animation", "pixel-art", "status", "fun", "desktop"]
+    }
+  ]
+}

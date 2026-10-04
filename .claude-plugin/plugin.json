@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "at-work",
+  "version": "1.0.0",
+  "description": "A pixel-art animation above the prompt that shows what Claude is doing right now, with computer-science jokes on the spinner and holiday decorations",
+  "author": {
+    "name": "Zhuoxing Zhang",
+    "url": "https://github.com/zhuoxingzhang"
+  },
+  "homepage": "https://github.com/zhuoxingzhang/pixel-at-work",
+  "repository": "https://github.com/zhuoxingzhang/pixel-at-work",
+  "license": "MIT",
+  "keywords": ["animation", "pixel-art", "status", "fun", "desktop"],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "language": {
+      "type": "string",
+      "title": "Language",
+      "description": "The band's words and jokes: auto follows the language of your latest prompt, zh is Chinese, en is English",
+      "default": "auto",
+      "options": ["auto", "zh", "en"]
+    }
+  }
+}
