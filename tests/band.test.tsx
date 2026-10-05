@@ -16,3 +16,10 @@ test('image by default, two frames after /at-work frame', ZH, async $ => {
   console.log('FRAME ' + b.slice(0, 260))
   expect(b).toContain('frame1')
 })
+
+test('command replies do not repeat the plugin name the engine already shows', ZH, async $ => {
+  for (const args of ['holiday christmas', 'holiday', 'holiday auto', 'frame', 'image']) {
+    const r = (await $.command.run({ command: 'at-work', args } as never)) as { text: string }
+    expect(r.text.startsWith('at-work')).toBe(false)
+  }
+})

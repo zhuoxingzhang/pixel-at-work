@@ -1714,6 +1714,7 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  // The engine shows a command's text after the plugin's name, so the replies do not start with it again.
   on('command.run', { command: 'at-work' }, async ($, e) => {
     const [arg = '', name = ''] = String(e.args ?? '').trim().split(/\s+/)
     if (arg === 'holiday') {
@@ -1723,10 +1724,10 @@ export const register: Register = (on, options) => {
       const list = names.map(k => say(`${k}（${HOLIDAYS[k].zh}）`, `${k} (${HOLIDAYS[k].en})`)).join(say('、', ', '))
       return {
         text: want
-          ? say(`at-work：先按${HOLIDAYS[want].zh}装饰给你看；/at-work holiday auto 回到按日期`,
-            `at-work: decorating for ${HOLIDAYS[want].en} now; /at-work holiday auto goes back to the calendar`)
-          : say(`at-work：节日装饰按日期自动出现；想先看一眼：/at-work holiday <名字>，可选 ${list}`,
-            `at-work: holiday decorations follow the calendar; to preview one: /at-work holiday <name>, one of ${list}`),
+          ? say(`先按${HOLIDAYS[want].zh}装饰给你看；/at-work holiday auto 回到按日期`,
+            `decorating for ${HOLIDAYS[want].en} now; /at-work holiday auto goes back to the calendar`)
+          : say(`节日装饰按日期自动出现；想先看一眼：/at-work holiday <名字>，可选 ${list}`,
+            `holiday decorations follow the calendar; to preview one: /at-work holiday <name>, one of ${list}`),
       }
     }
     const now = await read($, mode)
@@ -1734,8 +1735,8 @@ export const register: Register = (on, options) => {
     await update($, mode, () => want)
     const other = want === 'image' ? 'frame' : 'image'
     return {
-      text: say(`at-work：现在用${want === 'image' ? '图片' : '小窗'}模式画动画；/at-work ${other} 换回另一种`,
-        `at-work: drawing ${want === 'image' ? 'as an image' : 'in a frame'} now; /at-work ${other} switches back`),
+      text: say(`现在用${want === 'image' ? '图片' : '小窗'}模式画动画；/at-work ${other} 换回另一种`,
+        `drawing ${want === 'image' ? 'as an image' : 'in a frame'} now; /at-work ${other} switches back`),
     }
   })
 
