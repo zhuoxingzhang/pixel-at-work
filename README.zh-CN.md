@@ -45,7 +45,7 @@
 
 ## 安装
 
-需要支持插件钩子模块（hooks modules）的 Claude Code，已在 2.1.286 上测试。像素动画在桌面应用的 Code 标签页里显示，终端里则是一行字符动画。
+需要支持插件钩子模块（hooks modules）的 Claude Code，已在 2.1.289 上测试。像素动画在桌面应用的 Code 标签页里显示；在 34 行以上、支持真彩色且字体带方块字符的终端里（Windows Terminal、iTerm2、kitty、WezTerm、GNOME Terminal 等），它以 14 行半格方块的形式画在提示符上方；更矮的终端里则是一行字符动画（见下面的 `terminalArt`）。
 
 ### 从插件市场安装
 
@@ -91,12 +91,13 @@ git clone https://github.com/zhuoxingzhang/pixel-at-work ~/.claude/mods/at-work
 | | |
 |---|---|
 | `language` | 默认 `auto`，跟随你最近一条提示的语言，并跨会话记住；`zh` 固定中文，`en` 固定英文。可以用 `/plugin configure at-work@pixel-at-work` 设置，也可以安装时加上 `--config language=en`；克隆安装的，在 `~/.claude/settings.json` 里写 `"pluginConfigs": { "at-work": { "options": { "language": "en" } } }`。 |
+| `terminalArt` | 终端里画不画像素画：默认 `auto`，34 行以上的终端画像素画，更矮的用一行字符动画；`on` 只要提示符上方有 16 行就画；`off` 一律用一行字符动画。设置方法同 `language`。 |
 | `/at-work holiday <名字>` | 预览节日装饰，名字是 `newyear`、`spring`、`dragon`、`matariki`、`moon`、`halloween`、`christmas`；`auto` 回到按日期，不带名字会列出全部。 |
 | `/at-work image` 或 `/at-work frame` | 桌面端的画法：图片（默认，切换不闪）或小窗（备用）。 |
 
 ## 工作原理
 
-整个插件是一个钩子模块（`hooks/register.tsx`）。它观察工具调用来挑场景，每个调用都原样放行。桌面端的每个场景是一张用 SMIL 动起来的 SVG，不逐帧重画：只有场景或宽度变了，画面才会换。构建失败、调用失败、测试通过、调用被拒、上下文压缩完成，都会让动画停留几秒；刚结束的调用会多保留一会儿场景，这样很快的调用之间不会闪回思考画面。标签太长时会换到第二行，不会被省略号截掉。
+整个插件是一个钩子模块（`hooks/register.tsx`）。它观察工具调用来挑场景，每个调用都原样放行。桌面端的每个场景是一张用 SMIL 动起来的 SVG，不逐帧重画：只有场景或宽度变了，画面才会换。终端没有 SVG，于是同一份标记在动画的当前时刻被读回成像素，再打包成一格格的字符网格（`Raster`）：一列一个像素，上下半格方块各占一个像素，一行两个像素；Claude 干活时每秒重画五次，轮次之间每秒一次。构建失败、调用失败、测试通过、调用被拒、上下文压缩完成，都会让动画停留几秒；刚结束的调用会多保留一会儿场景，这样很快的调用之间不会闪回思考画面。标签太长时会换到第二行，不会被省略号截掉。
 
 插件不联网，只在本地记住检测到的语言。
 

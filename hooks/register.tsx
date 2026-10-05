@@ -8,14 +8,21 @@
 // passed test a party, a refused call a barrier, a background job a fishing rod, a compaction the press; between
 // turns it drinks coffee by day, sleeps by night and stands in the rain after an API error. On holidays (New Year,
 // Spring Festival, Dragon Boat, Matariki, Mid-Autumn, Halloween, Christmas) the wings are decorated, the creature
-// wears a hat and the Sky Tower is lit in the day's colours. On the terminal a one-line animation redrawn three
-// times a second. It only watches: every tool call passes on unchanged.
+// wears a hat and the Sky Tower is lit in the day's colours. A terminal with room shows the same picture as a grid
+// of half-block cells (a Raster, one column a pixel and two pixels a row), repainted five times a second from the
+// SVG's own animations evaluated at that moment; a small terminal gets a one-line animation redrawn three times a
+// second. It only watches: every tool call passes on unchanged.
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { Act, Crate, LastTurn } from '../types'
 
+// The clock of the terminal's drawing: the one-line animation is redrawn every TICK_MS, the picture every ART_MS,
+// and between turns, while a terminal shows the picture, every IDLE_MS, so that its stars blink and its creature
+// sleeps or sips; the desktop needs no clock, its SVG animates itself.
 const TICK_MS = 300
+const ART_MS = 200
+const IDLE_MS = 1000
 
 const running = atom({ plugin: 'at-work', key: 'running' } as const, [])
 const frame = atom({ plugin: 'at-work', key: 'frame' } as const, 0)
@@ -1442,6 +1449,226 @@ function picture(kind: string, lay: Layout, crates: Crate[] = [], others: string
 }
 
 // ---------------------------------------------------------------------------------------------------------------
+// The terminal's picture: the same markup, read back into pixels at a moment of its animations and packed into the
+// cells of a Raster, one column a pixel and two pixels a row (the upper or the lower half block in the pixel's
+// colour, or a space over a background where both pixels are one colour; the terminal's own background where
+// nothing is drawn, as the panel shows through on the desktop): H / 2 rows. The terminal has no SVG and draws real
+// pixels (Image) only under the kitty graphics protocol, which Windows Terminal and most others lack, so the cells
+// are the one way that works everywhere with true colour.
+
+/** One tag of the markup picture() writes: svg, style, defs, clipPath, g, rect, animate or animateTransform. */
+type Tag = { name: string; attrs: Record<string, string>; kids: Tag[] }
+
+/** The tree of the markup: tags, attributes and nesting only, which is all picture() writes. */
+function parse(svg: string): Tag {
+  const root: Tag = { name: 'root', attrs: {}, kids: [] }
+  const open: Tag[] = [root]
+  const tags = /<(\/?)([A-Za-z]+)([^>]*?)(\/?)>/g
+  for (let m = tags.exec(svg); m !== null; m = tags.exec(svg)) {
+    if (m[1] === '/') {
+      if (open.length > 1) open.pop()
+      continue
+    }
+    const attrs: Record<string, string> = {}
+    const pairs = /([A-Za-z-]+)="([^"]*)"/g
+    for (let a = pairs.exec(m[3]); a !== null; a = pairs.exec(m[3])) attrs[a[1]] = a[2]
+    const tag: Tag = { name: m[2], attrs, kids: [] }
+    open[open.length - 1].kids.push(tag)
+    if (m[4] !== '/') open.push(tag)
+  }
+  return root
+}
+
+/** A fill, '#rgb' or '#rrggbb', as 0xRRGGBB; -1 for anything else. */
+function rgb(fill: string | undefined): number {
+  if (fill === undefined || fill[0] !== '#') return -1
+  const hex = fill.length === 4 ? fill[1] + fill[1] + fill[2] + fill[2] + fill[3] + fill[3] : fill.slice(1)
+  const n = parseInt(hex, 16)
+  return Number.isNaN(n) ? -1 : n
+}
+
+/**
+ * Which of a discrete animation's n values holds at t seconds: they share dur evenly, over and over when it repeats
+ * indefinitely, else the last stays when the animation freezes; null before begin and after an end, when the
+ * attribute's own value stands.
+ */
+function step(a: Record<string, string>, t: number, n: number): number | null {
+  const dur = parseFloat(a.dur ?? '0')
+  const local = t - parseFloat(a.begin ?? '0')
+  if (!(dur > 0) || n === 0 || local < 0) return null
+  if (local >= dur && a.repeatCount !== 'indefinite') return a.fill === 'freeze' ? n - 1 : null
+  return Math.min(n - 1, Math.floor(((local % dur) / dur) * n))
+}
+
+type Area = { x: number; y: number; w: number; h: number }
+type Canvas = { W: number; px: Int32Array }
+
+// What a translucent pixel is blended over where nothing is drawn: the background of a dark terminal, assumed.
+const UNDER = 0x1e1e1e
+
+function mix(under: number, over: number, alpha: number): number {
+  const u = under < 0 ? UNDER : under
+  let out = 0
+  for (const s of [16, 8, 0]) out |= Math.round(((u >> s) & 255) * (1 - alpha) + ((over >> s) & 255) * alpha) << s
+  return out
+}
+
+/** Paints a rectangle over what is there, within the picture and the clip. */
+function fillArea(cv: Canvas, r: Area, clip: Area | null, color: number, alpha: number): void {
+  const x0 = Math.max(0, Math.round(r.x), clip ? clip.x : 0)
+  const y0 = Math.max(0, Math.round(r.y), clip ? clip.y : 0)
+  const x1 = Math.min(cv.W, Math.round(r.x + r.w), clip ? clip.x + clip.w : cv.W)
+  const y1 = Math.min(H, Math.round(r.y + r.h), clip ? clip.y + clip.h : H)
+  for (let y = y0; y < y1; y += 1) {
+    for (let x = x0; x < x1; x += 1) {
+      const k = y * cv.W + x
+      cv.px[k] = alpha >= 1 ? color : mix(cv.px[k], color, alpha)
+    }
+  }
+}
+
+/** The rectangle of a rect or clipPath tag at an offset. */
+function area(a: Record<string, string>, dx: number, dy: number): Area {
+  return { x: dx + Number(a.x ?? 0), y: dy + Number(a.y ?? 0), w: Number(a.width ?? 0), h: Number(a.height ?? 0) }
+}
+
+/**
+ * Draws a tag at t seconds: a rect as a rectangle, a group with the opacity and the translation its animations give
+ * it at t (frames, reveal, path and the crate's drop write one each) and clipped to the stage where it says so.
+ */
+function draw(cv: Canvas, tag: Tag, t: number, dx: number, dy: number, clip: Area | null, alpha: number, clips: Record<string, Tag>): void {
+  const a = tag.attrs
+  if (tag.name === 'rect') {
+    const color = rgb(a.fill)
+    const al = alpha * Number(a['fill-opacity'] ?? 1) * Number(a.opacity ?? 1)
+    if (color >= 0 && al > 0) fillArea(cv, area(a, dx, dy), clip, color, al)
+    return
+  }
+  if (tag.name !== 'g' && tag.name !== 'svg' && tag.name !== 'root') return
+  let op = Number(a.opacity ?? 1)
+  let tx = 0
+  let ty = 0
+  const tr = /translate\((-?[\d.]+) (-?[\d.]+)\)/.exec(a.transform ?? '')
+  if (tr) {
+    tx = Number(tr[1])
+    ty = Number(tr[2])
+  }
+  for (const k of tag.kids) {
+    if (k.name !== 'animate' && k.name !== 'animateTransform') continue
+    const vals = (k.attrs.values ?? '').split(';')
+    const i = step(k.attrs, t, vals.length)
+    if (i === null) continue
+    if (k.name === 'animate' && k.attrs.attributeName === 'opacity') op = Number(vals[i])
+    else if (k.name === 'animateTransform' && k.attrs.type === 'translate') {
+      const [x, y] = vals[i].trim().split(/\s+/).map(Number)
+      tx = x
+      ty = y
+    }
+  }
+  if (op <= 0) return
+  let box = clip
+  const ref = /url\(#([^)]+)\)/.exec(a['clip-path'] ?? '')
+  const cr = ref ? clips[ref[1]]?.kids.find(k => k.name === 'rect') : undefined
+  if (cr) {
+    const c = area(cr.attrs, dx + tx, dy + ty)
+    box = box === null
+      ? c
+      : { x: Math.max(box.x, c.x), y: Math.max(box.y, c.y), w: Math.min(box.x + box.w, c.x + c.w) - Math.max(box.x, c.x), h: Math.min(box.y + box.h, c.y + c.h) - Math.max(box.y, c.y) }
+  }
+  for (const k of tag.kids) draw(cv, k, t, dx + tx, dy + ty, box, alpha * op, clips)
+}
+
+// The terminal's default colour, for the cells where nothing is drawn.
+const DEFAULT = 0x01000000
+
+/** The pixels as the cells of a Raster of W columns and H / 2 rows, packed as RasterProps asks. */
+function cells(cv: Canvas): string {
+  const rows = H / 2
+  const words = new Uint32Array(cv.W * rows * 3)
+  let k = 0
+  for (let r = 0; r < rows; r += 1) {
+    for (let x = 0; x < cv.W; x += 1) {
+      const up = cv.px[2 * r * cv.W + x]
+      const lo = cv.px[(2 * r + 1) * cv.W + x]
+      let glyph = 0x20
+      let fg = DEFAULT
+      let bg = DEFAULT
+      if (up >= 0 && up === lo) bg = up
+      else if (up >= 0) {
+        glyph = 0x2580
+        fg = up
+        if (lo >= 0) bg = lo
+      } else if (lo >= 0) {
+        glyph = 0x2584
+        fg = lo
+      }
+      words[k] = glyph
+      words[k + 1] = fg
+      words[k + 2] = bg
+      k += 3
+    }
+  }
+  return base64(new Uint8Array(words.buffer))
+}
+
+/** Standard base64 of bytes: the runtime's own where it has one. */
+function base64(bytes: Uint8Array): string {
+  const own = (bytes as Uint8Array & { toBase64?: () => string }).toBase64
+  if (typeof own === 'function') return own.call(bytes)
+  const T = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  let s = ''
+  for (let i = 0; i < bytes.length; i += 3) {
+    const n = (bytes[i] << 16) | ((bytes[i + 1] ?? 0) << 8) | (bytes[i + 2] ?? 0)
+    s += T[n >> 18] + T[(n >> 12) & 63] + (i + 1 < bytes.length ? T[(n >> 6) & 63] : '=') + (i + 2 < bytes.length ? T[n & 63] : '=')
+  }
+  return s
+}
+
+/** The cells of a parsed picture W pixels wide at t seconds into its animations. */
+function rasterize(tree: Tag, W: number, t: number): string {
+  const cv: Canvas = { W, px: new Int32Array(W * H).fill(-1) }
+  const clips: Record<string, Tag> = {}
+  const collect = (tag: Tag): void => {
+    if (tag.name === 'clipPath' && tag.attrs.id) clips[tag.attrs.id] = tag
+    tag.kids.forEach(collect)
+  }
+  collect(tree)
+  draw(cv, tree, t, 0, 0, null, 1, clips)
+  return cells(cv)
+}
+
+// Whether a terminal draws the picture: the `terminalArt` option, 'auto' unless set.
+let artOption: 'auto' | 'on' | 'off' = 'auto'
+
+// The picture takes H / 2 rows and the label up to two (a long one wraps), so the band must have ART_NEED rows and,
+// on auto, the terminal ART_SCREEN, so that the band never takes most of a small screen; the picture is as wide as
+// the band, up to ART_MAX_W pixels, and the stage must fit.
+const ART_NEED = H / 2 + 2
+const ART_SCREEN = 34
+const ART_MAX_W = 320
+
+function artFits(columns: number, maxRows: number, rows: number | undefined): boolean {
+  if (artOption === 'off' || columns < STAGE || maxRows < ART_NEED) return false
+  return artOption === 'on' || rows === undefined || rows >= ART_SCREEN
+}
+
+// The picture a terminal shows: its tree, parsed once per change of scene, width, holiday, crates or helpers, and
+// when its animations began, which only a change of scene, width or holiday resets, as a new document would.
+let art: { key: string; scene: string; tree: Tag; start: number } | null = null
+
+/** The cells of the picture of a scene now, with the crates and helpers of the moment. */
+function artCells(kind: string, lay: Layout, crates: Crate[], others: string[], hol: string): string {
+  const scene = `${kind}|${lay.W}|${hol}`
+  const key = `${scene}|${crates.map(c => (c.ok ? c.kind : `!${c.kind}`)).join(',')}|${others.join(',')}`
+  const now = Date.now()
+  if (art === null || art.key !== key) {
+    const start = art !== null && art.scene === scene ? art.start : now
+    art = { key, scene, tree: parse(picture(kind, lay, crates, others)), start }
+  }
+  return rasterize(art.tree, lay.W, (now - art.start) / 1000)
+}
+
+// ---------------------------------------------------------------------------------------------------------------
 // The one-line animation of the terminal.
 
 function track(f: number, left: string, dot: string, right: string, n = 8): string {
@@ -1677,33 +1904,53 @@ function kilo(n: number): string {
 }
 
 let ticker: Timer | null = null
+let tickerMs = 0
+
+// What the band drew last: a terminal's picture or its one line, or the desktop; nothing is known before the first
+// drawing, and a drawing cannot start a clock, so the clock runs slowly until then in case a terminal shows the
+// picture between turns.
+let drawn: 'art' | 'line' | 'desktop' | null = null
+
+// Whether a turn runs or a /compact typed between turns presses the context: the clock runs fast meanwhile.
+let turning = false
+let pressing = false
+
+/** The interval the clock should run at now, 0 for none. */
+function wanted(): number {
+  if (turning || pressing) return drawn === 'art' ? ART_MS : TICK_MS
+  return drawn === 'art' || drawn === null ? IDLE_MS : 0
+}
 
 // The API error that ended this turn (rate_limit, overloaded, ...), from classic.StopFailure, until the next prompt.
 let oops = ''
 
-/** Starts the frame clock of the terminal's animation unless it runs; a hot reload drops it. */
+/** Runs the frame clock of the terminal's drawing at the interval wanted now, which it keeps checking; a hot reload drops it. */
 function tick($: EngineInterface): void {
-  if (ticker !== null) return
-  ticker = $.clock.every(TICK_MS, () => {
-    void update($, frame, f => (f + 1) % 100000)
-  })
-}
-
-function stop(): void {
+  const ms = wanted()
+  if (ms === tickerMs) return
   ticker?.cancel()
   ticker = null
+  tickerMs = ms
+  if (ms === 0) return
+  ticker = $.clock.every(ms, () => {
+    if (wanted() !== tickerMs) tick($)
+    void update($, frame, f => (f + 1) % 100000)
+  })
 }
 
 export const register: Register = (on, options) => {
   const chosen = String(options.language ?? 'auto')
   langFixed = chosen === 'zh' || chosen === 'en'
   if (langFixed) lang = chosen as Lang
+  const wantArt = String(options.terminalArt ?? 'auto')
+  artOption = wantArt === 'on' || wantArt === 'off' ? wantArt : 'auto'
 
   on('session.start', async ($, e, next) => {
     if (!langFixed) {
       const saved = await $.store.get('language')
       if (saved === 'zh' || saved === 'en') lang = saved
     }
+    tick($)
     await $.command.register({
       name: 'at-work',
       description: say(
@@ -1754,6 +2001,7 @@ export const register: Register = (on, options) => {
     await update($, linger, () => null)
     await update($, word, w => w + 1)
     oops = ''
+    turning = true
     tick($)
     return next(e)
   })
@@ -1764,6 +2012,7 @@ export const register: Register = (on, options) => {
     const id = `compact-${Date.now()}`
     const label = `${e.agentId ? say('🤖 小助手 · ', '🤖 helper · ') : ''}${e.trigger === 'auto' ? say('上下文满了，压一压', 'context is full, squeezing it') : say('压缩上下文', 'compacting the context')}`
     await update($, running, list => [...list, { id, kind: 'compact', label, since: Date.now(), isSubagent: Boolean(e.agentId) }])
+    pressing = true
     tick($)
     try {
       const r = await next(e)
@@ -1773,6 +2022,8 @@ export const register: Register = (on, options) => {
       return r
     } finally {
       await update($, running, list => list.filter(a => a.id !== id))
+      pressing = false
+      tick($)
     }
   })
 
@@ -1791,6 +2042,7 @@ export const register: Register = (on, options) => {
     await update($, running, list => [...list.filter(a => a.id !== id), act])
     await update($, steps, n => n + 1)
     await update($, flash, f => (f !== null && f.until <= now ? null : f))
+    turning = true
     tick($)
     let r: { isError?: boolean; text?: string; deny?: string } | undefined
     try {
@@ -1808,7 +2060,8 @@ export const register: Register = (on, options) => {
   })
 
   on('turn.complete', async ($, e, next) => {
-    stop()
+    turning = false
+    tick($)
     await update($, flash, () => null)
     await update($, linger, () => null)
     const started = await read($, turnStart)
@@ -1862,6 +2115,7 @@ export const register: Register = (on, options) => {
     if (e.surface === 'desktop') {
       // the scene animates by itself, so this drawing reads no frame counter; the label row follows every change,
       // the picture only a change of scene or width, through the hidden frame (see slots)
+      drawn = 'desktop'
       const { Box, Text, Svg } = $.ui.resolve(e)
       const crates = await read($, history)
       await read($, swap)
@@ -1914,6 +2168,37 @@ export const register: Register = (on, options) => {
       )
     }
 
+    if (e.surface === 'terminal' && artFits(e.props.bodyColumns, e.props.maxRows, e.viewport?.rows)) {
+      // the picture at this moment of its animations, drawn again at every tick of the clock (see tick)
+      drawn = 'art'
+      const { Box, Text, Raster } = $.ui.resolve(e)
+      const crates = await read($, history)
+      await read($, frame)
+      const W = Math.min(ART_MAX_W, e.props.bodyColumns)
+      const L = Math.floor((W - STAGE) / 2)
+      const grid = artCells(kind, { W, L, R: W - STAGE - L }, crates, list.slice(0, -1).map(a => a.kind), hol ?? '')
+      const elapsed = started ? mmss((Date.now() - started) / 1000) : ''
+      return (
+        <Box flexDirection="column">
+          <Raster key="art" columns={W} rows={H / 2} cells={grid} />
+          <Box flexDirection="row" gap={1}>
+            <Box flexShrink={1}>
+              <Text bold wrap="wrap">
+                {label}
+                {more}
+              </Text>
+            </Box>
+            {busy && started ? (
+              <Box flexShrink={0}>
+                <Text dimColor>{say(`· 第 ${n} 步 · ${elapsed}`, `· step ${n} · ${elapsed}`)}</Text>
+              </Box>
+            ) : null}
+          </Box>
+        </Box>
+      )
+    }
+
+    drawn = 'line'
     const { Box, Text } = $.ui.resolve(e)
     if (!busy) {
       if (done === null) return next(e)

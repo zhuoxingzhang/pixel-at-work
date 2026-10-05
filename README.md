@@ -45,7 +45,7 @@ New Year, Spring Festival (from its eve to the Lantern Festival), Dragon Boat Fe
 
 ## Install
 
-You need a Claude Code build that runs plugin hooks modules (tested with 2.1.286). The pixel art is drawn in the desktop app's Code tab; a terminal session gets a one-line animation instead.
+You need a Claude Code build that runs plugin hooks modules (tested with 2.1.289). The pixel art is drawn in the desktop app's Code tab and, in a terminal of 34 rows or more with true colour and a font that has the block glyphs (Windows Terminal, iTerm2, kitty, WezTerm, GNOME Terminal and the like), above the prompt as 14 rows of half-block cells; a smaller terminal gets a one-line animation instead (see `terminalArt` below).
 
 ### From the marketplace
 
@@ -91,12 +91,13 @@ Hooks modules may be switched off for your account. Turn them on in the `env` bl
 | | |
 |---|---|
 | `language` | `auto` (the default) follows the language of your latest prompt and remembers it across sessions; `zh` is Chinese, `en` is English. Set it with `/plugin configure at-work@pixel-at-work`, with `claude plugin install at-work@pixel-at-work --config language=en`, or, for a clone, with `"pluginConfigs": { "at-work": { "options": { "language": "en" } } }` in `~/.claude/settings.json`. |
+| `terminalArt` | whether a terminal draws the pixel art: `auto` (the default) draws it in a terminal of 34 rows or more and the one-line animation in a smaller one, `on` draws it wherever the band has 16 rows, `off` keeps the one-line animation. Set it as `language` is set. |
 | `/at-work holiday <name>` | previews a holiday: `newyear`, `spring`, `dragon`, `matariki`, `moon`, `halloween`, `christmas`; `auto` goes back to the calendar, no name lists them. |
 | `/at-work image` or `/at-work frame` | how the desktop draws the picture: as an image (the default, which never blinks) or in a frame (a fallback). |
 
 ## How it works
 
-One hooks module (`hooks/register.tsx`). It watches tool calls to pick a scene and passes every call on unchanged. On the desktop each scene is an SVG animated by SMIL, so nothing is redrawn frame by frame: the picture changes only when the scene or the width does. A failed build, a failed call, a passed test, a refused call and a finished compaction hold the band for a few seconds; a call that just ended keeps its scene a moment, so quick calls do not flicker through thinking. A label too long for its row wraps onto a second one rather than ending in an ellipsis.
+One hooks module (`hooks/register.tsx`). It watches tool calls to pick a scene and passes every call on unchanged. On the desktop each scene is an SVG animated by SMIL, so nothing is redrawn frame by frame: the picture changes only when the scene or the width does. A terminal has no SVG, so there the same markup is read back into pixels at the moment of its animations and packed into a grid of cells (a `Raster`), one column a pixel and two pixels a row as the upper and lower half blocks, repainted five times a second while Claude works and once a second between turns. A failed build, a failed call, a passed test, a refused call and a finished compaction hold the band for a few seconds; a call that just ended keeps its scene a moment, so quick calls do not flicker through thinking. A label too long for its row wraps onto a second one rather than ending in an ellipsis.
 
 Nothing leaves your machine: the plugin makes no network requests and stores only the detected language.
 

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "at-work",
-  "version": "1.0.1",
-  "description": "A pixel-art animation above the prompt that shows what Claude is doing right now, with computer-science jokes on the spinner and holiday decorations",
+  "version": "1.1.0",
+  "description": "A pixel-art animation above the prompt that shows what Claude is doing right now, with computer-science jokes on the spinner and holiday decorations; on the desktop and in a terminal",
   "author": {
     "name": "Zhuoxing Zhang",
     "url": "https://github.com/zhuoxingzhang"
@@ -10,7 +10,7 @@
   "homepage": "https://github.com/zhuoxingzhang/pixel-at-work",
   "repository": "https://github.com/zhuoxingzhang/pixel-at-work",
   "license": "MIT",
-  "keywords": ["animation", "pixel-art", "status", "fun", "desktop"],
+  "keywords": ["animation", "pixel-art", "status", "fun", "desktop", "terminal"],
   "types": "./types/index.d.ts",
   "userConfig": {
     "language": {
@@ -19,6 +19,13 @@
       "description": "The band's words and jokes: auto follows the language of your latest prompt, zh is Chinese, en is English",
       "default": "auto",
       "options": ["auto", "zh", "en"]
+    },
+    "terminalArt": {
+      "type": "string",
+      "title": "Pixel art in a terminal",
+      "description": "auto draws the pixel art (14 rows of half-block cells) in a terminal of 34 rows or more and a one-line animation in a smaller one; on draws it wherever the band has 16 rows; off keeps the one-line animation",
+      "default": "auto",
+      "options": ["auto", "on", "off"]
     }
   }
 }
